@@ -9,7 +9,7 @@ import json
 import tornado.ioloop
 import tornado.websocket
 
-sys.path.append(('/').join(os.path.abspath(__file__).split('/')[:-2]))
+sys.path.append(('/').join(os.path.abspath(__file__).split('/')[:-3]))
 from head.spine.core import get_spine
 from head.spine.appendages.pid import Pid
 
@@ -66,47 +66,40 @@ class Server(tornado.websocket.WebSocketHandler):
                 log(self.id, "entered wrong pin")
 
         else:
-            # If message starts with the command, run the code
             cmd = "GetPIDOptions"
             if message[:len(cmd)] == cmd:
-                # Additional data will be in "message[len(cmd):]"
-                # Messages can be sent to this client using "self.write_message(str)"
                 pids = []
                 for key, appendage in iter(self.s.get_appendage_dict().items()):
                     if isinstance(appendage, Pid):
                         pids.append(key)
-                self.write_message(json.dumps(pids))
+                self.write_message(cmd + json.dumps(pids))
 
-            # If message starts with the command, run the code
             cmd = "PostPIDSelection"
             if message[:len(cmd)] == cmd:
-                # Additional data will be in "message[len(cmd):]"
-                # Messages can be sent to this client using "self.write_message(str)"
+                # Turn off previous pid if it exists
+                if hasattr(self, 'pid'):
+                    self.pid.set(0)
+                    self.pid.off()
+
                 self.pid = self.s.get_appendage(message[len(cmd):])
 
-            # If message starts with the command, run the code
-            cmd = "PostPID"
+            cmd = "PostConstants"
             if message[:len(cmd)] == cmd:
-                # Additional data will be in "message[len(cmd):]"
-                # Messages can be sent to this client using "self.write_message(str)"
                 pid_constants = json.loads(message[len(cmd):])
                 self.pid.modify_constants(pid_constants['kp'], pid_constants['ki'],
                                           pid_constants['kd'])
 
-            # If message starts with the command, run the code
+            cmd = "GetConstants"
+            if message[:len(cmd)] == cmd:
+                self.write_message(cmd + json.dumps(self.pid.constants()))
+
             cmd = "PostSetpoint"
             if message[:len(cmd)] == cmd:
-                # Additional data will be in "message[len(cmd):]"
-                # Messages can be sent to this client using "self.write_message(str)"
                 self.pid.set(float(message[len(cmd):]))
 
-            # If message starts with the command, run the code
             cmd = "GetDisplay"
             if message[:len(cmd)] == cmd:
-                # Additional data will be in "message[len(cmd):]"
-                # Messages can be sent to this client using "self.write_message(str)"
-
-                self.write_message(json.dumps(self.pid.display()))
+                self.write_message(cmd + json.dumps(self.pid.display()))
 
     # Client disconnected
     def on_close(self):
