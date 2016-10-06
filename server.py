@@ -8,6 +8,7 @@ import json
 
 import tornado.ioloop
 import tornado.websocket
+import tornado.httpserver
 
 sys.path.append(('/').join(os.path.abspath(__file__).split('/')[:-3]))
 from head.spine.core import get_spine
@@ -18,7 +19,7 @@ clients = set()
 clientId = 0
 
 # Port for the websocket to be hosted on
-port = 9002
+port = 9005
 pin = random.randint(0, 99999)
 
 
@@ -105,8 +106,20 @@ class Server(tornado.websocket.WebSocketHandler):
     def on_close(self):
         clients.remove(self)
         log(self.id, "disconnected")
-        self.gs.__exit__()
 
+class SetupTLS(tornado.web.RequestHandler):
+    def get(self):
+        self.write("Please accept the TLS certificate to use websockets from this device.")
+
+
+def make_app():
+    return tornado.httpserver.HTTPServer(tornado.web.Application([
+        (r"/", Server),
+        (r"/setuptls", SetupTLS)
+    ]), ssl_options={
+        "certfile": "/etc/ssl/certs/tornado.crt",
+        "keyfile": "/etc/ssl/certs/tornado.key"
+    })
 
 # Catch ctrl+c
 def sigInt_handler(signum, frame):
@@ -124,7 +137,7 @@ def sigInt_handler(signum, frame):
     sys.exit(0)
 
 if __name__ == "__main__":
-    app = tornado.web.Application([(r"/", Server)])
+    app = make_app()
     app.listen(port)
     signal.signal(signal.SIGINT, sigInt_handler)
     print("Pin: {:05d}".format(pin))
